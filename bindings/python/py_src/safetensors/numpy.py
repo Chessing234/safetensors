@@ -12,7 +12,12 @@ def _flatten(
 ) -> Dict[str, Dict]:
     flattened = {}
     for k, v in tensor_dict.items():
-        tensor = v
+        # data_ptr/nbytes describe the raw buffer, not the logical array.
+        # A Fortran array or a strided slice has to be packed first or the
+        # file stores the wrong bytes under the declared shape.
+        tensor = np.ascontiguousarray(v)
+        if tensor is not v:
+            keep_alive_buffer.append(tensor)
         if not _is_little_endian(tensor):
             tensor = tensor.byteswap(inplace=False)
             keep_alive_buffer.append(tensor)
@@ -33,7 +38,8 @@ def save(
 
     Args:
         tensor_dict (`Dict[str, np.ndarray]`):
-            The incoming tensors. Tensors need to be contiguous and dense.
+            The incoming tensors. Non-contiguous arrays are copied into C order
+            before they are written.
         metadata (`Dict[str, str]`, *optional*, defaults to `None`):
             Optional text only metadata you might want to save in your header.
             For instance it can be useful to specify more about the underlying
@@ -68,7 +74,8 @@ def save_file(
 
     Args:
         tensor_dict (`Dict[str, np.ndarray]`):
-            The incoming tensors. Tensors need to be contiguous and dense.
+            The incoming tensors. Non-contiguous arrays are copied into C order
+            before they are written.
         filename (`str`, or `os.PathLike`)):
             The filename we're saving into.
         metadata (`Dict[str, str]`, *optional*, defaults to `None`):
